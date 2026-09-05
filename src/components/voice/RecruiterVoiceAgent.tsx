@@ -318,111 +318,131 @@ export function RecruiterVoiceAgent({
     []
   );
 
-  const stopRecordingAndUpload = useCallback(
-    async (): Promise<string | undefined> => {
-      return new Promise((resolve) => {
-        const recorder =
-          mediaRecorderRef.current;
+ const stopRecordingAndUpload = useCallback(
+  async (): Promise<string | undefined> => {
+    return new Promise((resolve) => {
+      const recorder = mediaRecorderRef.current;
 
-        if (!recorder) {
-          resolve(undefined);
-          return;
-        }
+      if (!recorder) {
+        resolve(undefined);
+        return;
+      }
 
-        const callId =
-          recordingCallIdRef.current;
+      const callId = recordingCallIdRef.current;
 
-        recorder.onstop = async () => {
-          try {
-            setIsRecording(false);
+      recorder.onstop = async () => {
+        try {
+          setIsRecording(false);
 
-            mediaRecorderRef.current = null;
+          mediaRecorderRef.current = null;
 
-            const chunks =
-              recordedChunksRef.current;
+          const chunks = recordedChunksRef.current;
 
-            if (!chunks.length) {
-              console.warn(
-                "No video recording chunks found."
-              );
-
-              resolve(undefined);
-              return;
-            }
-
-            const videoBlob = new Blob(
-              chunks,
-              {
-                type:
-                  recorder.mimeType ||
-                  "video/webm",
-              }
+          if (!chunks.length) {
+            console.warn(
+              "No video recording chunks found."
             );
 
+            resolve(undefined);
+            return;
+          }
+
+          const videoBlob = new Blob(chunks, {
+            type:
+              recorder.mimeType ||
+              "video/webm",
+          });
+
+          console.log(
+            "🎥 Recording complete:",
+            `${(videoBlob.size / 1024 / 1024).toFixed(
+              2
+            )} MB`
+          );
+
+          if (!callId) {
+            console.warn(
+              "No call ID available for video upload."
+            );
+
+            resolve(undefined);
+            return;
+          }
+
+          setUploadingVideo(true);
+
+          console.log(
+            "☁️ Uploading interview video..."
+          );
+
+          const uploadResult =
+            await uploadInterviewVideo(
+              videoBlob,
+              candidateId,
+              callId
+            );
+
+          console.log(
+            "✅ Video upload result:",
+            uploadResult
+          );
+
+          recordedChunksRef.current = [];
+
+          setUploadingVideo(false);
+
+          /*
+           * uploadInterviewVideo()
+           * returns an object.
+           *
+           * We only need videoUrl here.
+           */
+          if (
+            uploadResult &&
+            uploadResult.success &&
+            typeof uploadResult.videoUrl ===
+              "string"
+          ) {
             console.log(
-              "🎥 Recording complete:",
-              `${(videoBlob.size / 1024 / 1024).toFixed(
-                2
-              )} MB`
+              "🎬 Video URL:",
+              uploadResult.videoUrl
             );
 
-            if (!callId) {
-              console.warn(
-                "No call ID available for video upload."
-              );
-
-              resolve(undefined);
-              return;
-            }
-
-            setUploadingVideo(true);
-
-            console.log(
-              "☁️ Uploading interview video..."
+            resolve(
+              uploadResult.videoUrl
             );
-
-            const videoUrl =
-              await uploadInterviewVideo(
-                videoBlob,
-                candidateId,
-                callId
-              );
-
-            console.log(
-              "✅ Video uploaded successfully:",
-              videoUrl
+          } else {
+            console.warn(
+              "Video upload completed without a valid video URL."
             );
-
-            recordedChunksRef.current = [];
-
-            setUploadingVideo(false);
-
-            resolve(videoUrl);
-          } catch (error) {
-            console.error(
-              "Video upload failed:",
-              error
-            );
-
-            setRecordingError(
-              "Interview ended, but the video could not be uploaded."
-            );
-
-            setUploadingVideo(false);
 
             resolve(undefined);
           }
-        };
+        } catch (error) {
+          console.error(
+            "Video upload failed:",
+            error
+          );
 
-        if (recorder.state !== "inactive") {
-          recorder.stop();
-        } else {
+          setRecordingError(
+            "Interview ended, but the video could not be uploaded."
+          );
+
+          setUploadingVideo(false);
+
           resolve(undefined);
         }
-      });
-    },
-    [candidateId]
-  );
+      };
+
+      if (recorder.state !== "inactive") {
+        recorder.stop();
+      } else {
+        resolve(undefined);
+      }
+    });
+  },
+  [candidateId]
+);
 
   /* =====================================================
      LOAD VAPI SDK
@@ -1221,7 +1241,7 @@ export function RecruiterVoiceAgent({
       {/* VIDEO AREA */}
 
       <div className="bg-gray-950 p-4">
-        <div className="relative w-full aspect-video max-h-[420px] rounded-xl overflow-hidden bg-black flex items-center justify-center">
+        <div className="relative w-full aspect-video max-h-105 rounded-xl overflow-hidden bg-black flex items-center justify-center">
           <video
             ref={videoRef}
             autoPlay
